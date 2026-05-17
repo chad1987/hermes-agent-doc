@@ -1,0 +1,5 @@
+{
+    "title": "CLI 命令系统",
+    "path": ["核心子系统", "CLI 命令系统", "概述"],
+    "content": "<h1>CLI 命令系统</h1><p>Hermes Agent 的 CLI 命令通过 <code>COMMAND_REGISTRY</code> 集中管理，支持别名、平台特定映射。</p><h2>命令分类</h2><table><tr><th>分类</th><th>命令示例</th></tr><tr><td>Session</td><td>new, clear, retry, undo, compress, stop, background</td></tr><tr><td>Configuration</td><td>config, model, personality, skin, voice, reasoning</td></tr><tr><td>Tools & Skills</td><td>tools, skills, cron, kanban, plugins</td></tr><tr><td>Info</td><td>help, usage, insights, platforms, update, debug</td></tr><tr><td>Exit</td><td>quit</td></tr></table><h2>添加新命令</h2><h3>1. 注册命令</h3><p>在 <code>hermes_cli/commands.py</code> 添加 <code>CommandDef</code>：</p><pre><code class=\"language-python\">CommandDef(\"mycommand\", \"Do something\", \"Session\",\n           aliases=(\"mc\",), args_hint=\"<prompt>\")</code></pre><h3>2. 添加处理器</h3><p>在 <code>hermes_cli/cli.py</code> 的 <code>process_command()</code> 方法：</p><pre><code class=\"language-python\">elif canonical == \"mycommand\":\n    self._handle_mycommand(cmd_original)</code></pre><div class=\"info-box\">添加别名只需修改 <code>aliases</code> 元组，分发、帮助文本、平台菜单都会自动更新。</div>"
+}

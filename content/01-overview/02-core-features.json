@@ -1,0 +1,5 @@
+{
+    "title": "核心特性",
+    "path": ["项目概述", "核心特性"],
+    "content": "<h1>核心特性</h1><table><tr><th>特性</th><th>描述</th></tr><tr><td>真实终端界面</td><td>完整的 TUI，支持多行编辑、slash 命令补全、对话历史、中断重定向、流式工具输出</td></tr><tr><td>多平台运行</td><td>Telegram、Discord、Slack、WhatsApp、Signal，一个进程支持所有平台</td></tr><tr><td>闭环学习系统</td><td>Agent 管理的记忆 + 定期提醒 + 自主技能创建 + 技能自改进 + FTS5 会话搜索</td></tr><tr><td>调度自动化</td><td>内置 cron 调度器，投递到任意平台。每日报告、每周审计，全部自然语言配置</td></tr><tr><td>委托与并行</td><td>生成孤立子 Agent 处理并行工作流。RPC 调用工具，零上下文成本折叠多步流程</td></tr><tr><td>任意环境运行</td><td>本地、Docker、SSH、Modal、Daytona、Vercel Sandbox。Serverless 持久化，空闲时几乎零成本</td></tr><tr><td>研究就绪</td><td>批量轨迹生成、轨迹压缩，训练下一代 tool-calling 模型</td></tr></table><h2>与 OpenClaw 的差异</h2><div class=\"info-box\">Hermes Agent 是 OpenClaw 的精神继承者，但完全重写。迁移指南: <code>hermes claw migrate</code></div>"
+}

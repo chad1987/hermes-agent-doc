@@ -1,0 +1,262 @@
+{
+    "title": "闭环学习系统",
+    "path": ["核心子系统", "闭环学习系统", "深入理解"],
+    "content": `<h1>闭环学习系统</h1>
+
+<p>Hermes Agent 的闭环学习系统是区别于其他 Agent 的核心特性。通过技能自动创建、技能自改进、记忆整合和 Curator 策展，形成完整的学习反馈闭环。</p>
+
+<h2>整体架构</h2>
+
+<pre class="mermaid">graph TB
+    subgraph \"用户输入\"
+        USER[用户任务]
+    end
+
+    subgraph \"Agent 执行\"
+        AGENT[AIAgent<br/>run_conversation]
+        SKILL[技能调用<br/>skill_view / skill_manage]
+    end
+
+    subgraph \"Telemetry\"
+        USAGE[.usage.json<br/>use_count / view_count / patch_count]
+    end
+
+    subgraph \"Curator 策展\"
+        CUR[curator.py<br/>生命周期管理]
+        UMBRELLA[伞形构建<br/>技能合并]
+    end
+
+    subgraph \"记忆系统\"
+        MEM[MemoryManager<br/>跨会话持久化]
+        HON[Honcho<br/>用户建模]
+    end
+
+    USER --> AGENT
+    AGENT --> SKILL
+    SKILL --> USAGE
+    USAGE --> CUR
+    CUR --> UMBRELLA
+    AGENT --> MEM
+    MEM --> HON
+
+    subgraph \"闭环\"
+        UMBRELLA -.->|合并优化| SKILL
+        HON -.->|用户理解| AGENT
+    end</pre>
+
+<h2>技能自动创建</h2>
+
+<h3>触发条件</h3>
+
+<p>Agent 可以通过 <code>skill_manage(action='create')</code> 自动创建技能，触发条件：</p>
+<ul>
+<li>复杂任务成功（5+ 次 tool 调用）</li>
+<li>克服了错误</li>
+<li>用户纠正的方法有效</li>
+<li>发现了非平凡工作流</li>
+<li>用户要求记住一个程序</li>
+</ul>
+
+<h3>创建流程</h3>
+
+<pre><code class="language-python"># tools/skill_manager_tool.py
+def skill_manage(action, skill_name, content, ...) -> str:
+    if action == 'create':
+        # 1. 验证名称、类别、内容
+        # 2. frontmatter 必须包含 name + description
+        # 3. SKILL.md ≤ 100,000 字符
+        # 4. 检查名称冲突
+        # 5. 原子写入（临时文件 + os.replace）
+        # 6. 安全扫描（可选）
+        # 7. 失败回滚</code></pre>
+
+<h3>技能目录结构</h3>
+
+<pre><code class="language-text">~/.hermes/skills/
+├── my-skill/
+│   ├── SKILL.md           # 主指令
+│   ├── references/        # 支持文档
+│   ├── templates/         # 模板
+│   ├── scripts/           # 脚本
+│   └── assets/            # 资产
+└── category/
+    └── another-skill/
+        └── SKILL.md</code></pre>
+
+<h2>Curator 技能策展系统</h2>
+
+<h3>生命周期状态机</h3>
+
+<pre class="mermaid">graph LR
+    A[active] -->|stale_after_days (30天)| B[stale]
+    B -->|archive_after_days (90天)| C[archived]
+    A -->|pinned| A
+    C -.->|restore| A
+    B -.->|restore| A</pre>
+
+<h3>自动转换（纯函数，无 LLM）</h3>
+
+<pre><code class="language-python">def apply_automatic_transitions(skills, config):
+    \"\"\"基于最后活动时间戳自动标记\"\"\"
+    for skill in skills:
+        if skill.is_pinned:
+            continue
+        latest = latest_activity_at(skill)  # 从 .usage.json
+        if age > archive_after_days:
+            skill.state = 'archived'
+        elif age > stale_after_days:
+            skill.state = 'stale'</code></pre>
+
+<h3>LLM 审查 Pass（伞形构建）</h3>
+
+<pre><code class="language-python">def run_curator_review():
+    \"\"\"后台 fork AIAgent 执行策展\"\"\"
+    review_agent = AIAgent(
+        max_iterations=9999,
+        skip_memory=True,
+        _memory_nudge_interval=0,  # 防止递归
+    )
+
+    # 生成伞形构建提示
+    # 1. 识别技能前缀聚类（如 pr-*, hermes-config-*）
+    # 2. 对 2+ 成员聚类进行合并
+    # 3. 三种策略：
+    #    - MERGE INTO EXISTING UMBRELLA
+    #    - CREATE A NEW UMBRELLA
+    #    - DEMOTE TO REFERENCES</code></pre>
+
+<h3>调度机制</h3>
+
+<pre><code class="language-python">def maybe_run_curator():
+    \"\"\"agent 空闲时检查是否应运行\"\"\"
+    if not is_idle(min_idle_hours=2):
+        return
+    if not enough_time_passed(interval_hours=168):  # 7天
+        return
+    run_curator_review()</code></pre>
+
+<h2>技能使用 telemetry</h2>
+
+<h3>跟踪指标（~/.hermes/skills/.usage.json）</h3>
+
+<pre><code class="language-json">{
+  "skill-name": {
+    "use_count": 42,
+    "last_used_at": "2026-05-10T18:30:00Z",
+    "view_count": 156,
+    "last_viewed_at": "2026-05-17T10:00:00Z",
+    "patch_count": 3,
+    "last_patched_at": "2026-05-05T14:20:00Z"
+  }
+}</code></pre>
+
+<h3>bump 机制</h3>
+
+<pre><code class="language-python"># skill_view() → bump_view() + bump_use()
+# skill 调用时 → bump_use()
+# skill_manage(edit) → bump_patch()</code></pre>
+
+<h2>记忆系统与技能闭环</h2>
+
+<h3>关键区分</h3>
+
+<div class="info-box">
+<strong>记忆系统描述用户，技能系统描述可重用程序。</strong>
+</div>
+
+<pre><code class="language-python\"># agent/prompt_builder.py
+\"Your memory and user profile describe the USER,
+ not the system you are running on.\"</code></pre>
+
+<h3>闭环数据流</h3>
+
+<pre class="mermaid">graph LR
+    A[用户执行任务] --> B[Agent 运行]
+    B --> C[使用技能]
+    C --> D[skill_view / skill_manage]
+    D --> E[.usage.json telemetry]
+    E --> F[Curator 审查]
+    F --> G{合并/归档}
+    G -->|合并| H[伞形技能]
+    G -->|归档| I[.archive/]
+    H --> C
+    B --> J[Memory sync]
+    J --> K[Honcho 用户画像]
+    K --> B</pre>
+
+<h2>Honcho 用户建模</h2>
+
+<p>Honcho 是 Hermes Agent 的用户建模 Provider，提供跨会话用户理解：</p>
+
+<h3>核心功能</h3>
+<ul>
+<li><strong>跨会话记忆</strong> — 每次 turn 后持久化</li>
+<li><strong>用户 profile</strong> — 偏好、事实、沟通风格</li>
+<li><strong>语义搜索</strong> — 搜索过去对话中的观察</li>
+<li><strong>多 Agent 感知</strong> — 父子 Agent 自动追踪</li>
+</ul>
+
+<h3>工具</h3>
+<table>
+<tr><th>工具</th><th>功能</th></tr>
+<tr><td>honcho_context</td><td>跨会话完整用户表示</td></tr>
+<tr><td>honcho_search_conclusions</td><td>语义搜索结论</td></tr>
+<tr><td>honcho_search_messages</td><td>跨会话消息搜索</td></tr>
+<tr><td>honcho_session</td><td>当前会话历史</td></tr>
+<tr><td>honcho_ask</td><td>LLM 驱动问答</td></tr>
+</table>
+
+<h2>Dreaming 夜间整合</h2>
+
+<p>通过 cron job 执行的夜间梦境系统，自动整合记忆：</p>
+
+<h3>三阶段模型</h3>
+<table>
+<tr><th>阶段</th><th>目的</th><th>持久化</th></tr>
+<tr><td>Light</td><td>排序和暂存近期素材</td><td>否</td></tr>
+<tr><td>Deep</td><td>打分并提升持久候选者</td><td>是 (MEMORY.md)</td></tr>
+<tr><td>REM</td><td>反思主题和重复想法</td><td>否</td></tr>
+</table>
+
+<h3>Deep Ranking 信号</h3>
+<table>
+<tr><th>信号</th><th>权重</th><th>描述</th></tr>
+<tr><td>Frequency</td><td>0.24</td><td>短期信号累积次数</td></tr>
+<tr><td>Relevance</td><td>0.30</td><td>平均检索质量</td></tr>
+<tr><td>Query diversity</td><td>0.15</td><td>触发查询的多样性</td></tr>
+<tr><td>Recency</td><td>0.15</td><td>时间衰减新鲜度</td></tr>
+<tr><td>Consolidation</td><td>0.10</td><td>多日复发强度</td></tr>
+<tr><td>Conceptual richness</td><td>0.06</td><td>概念标签密度</td></tr>
+</table>
+
+<h2>关键设计原则</h2>
+
+<ol>
+<li><strong>不删除只归档</strong> — <code>.archive/</code> 目录中的技能可恢复</li>
+<li><strong>Pinned 保护</strong> — 固定技能绕过所有自动转换</li>
+<li><strong>仅 agent 创建的技能</strong> — bundled/hub-installed 技能不参与策展</li>
+<li><strong>后台审查隔离</strong> — LLM pass 使用独立 fork，不影响主会话</li>
+<li><strong>原子写入</strong> — 所有文件系统操作使用临时文件 + replace</li>
+<li><strong>声明式删除</strong> — <code>absorbed_into</code> 参数使策展分类权威化</li>
+<li><strong>Telemetry 分离</strong> — 使用侧 car JSON 而非 frontmatter，避免冲突</li>
+</ol>
+
+<h2>CLI 命令</h2>
+
+<h3>hermes curator</h3>
+<pre><code class="language-bash">hermes curator status   # 显示策展状态和技能统计
+hermes curator run      # 触发策展运行 [--dry-run] [--sync] [--background]
+hermes curator pause    # 暂停策展
+hermes curator resume   # 恢复策展
+hermes curator pin      # 固定技能
+hermes curator restore  # 恢复归档技能
+hermes curator archive # 手动归档技能
+hermes curator backup  # 手动快照技能树
+hermes curator rollback # 从快照恢复</code></pre>
+
+<h2>与 OpenClaw 的关系</h2>
+
+<div class="info-box">
+Hermes Agent 是 OpenClaw 的精神继承者，但完全重写。闭环学习系统在 Hermes Agent 中通过 <code>agent/curator.py</code> 和 <code>agent/background_review.py</code> 实现，不再依赖 OpenClaw 的 TypeScript 实现。
+</div>`
+}

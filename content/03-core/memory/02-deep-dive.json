@@ -1,0 +1,171 @@
+{
+    "title": "Memory 记忆系统",
+    "path": ["核心子系统", "Memory 记忆系统", "深入理解"],
+    "content": `<h1>Memory 记忆系统</h1>
+<p>Hermes Agent 的记忆系统是闭环学习的核心组成部分，支持跨会话持久化和多种后端 Provider。</p>
+
+<h2>整体架构</h2>
+
+<pre class="mermaid">graph TB
+    subgraph \"MemoryStore (内置)\"
+        MEM[memory_tool.py<br/>MEMORY.md / USER.md]
+        SYS[系统提示快照<br/>session 期间不变]
+    end
+
+    subgraph \"MemoryManager\"
+        MM[memory_manager.py<br/>协调内置 + 外部 provider]
+        SANI[上下文净化<br/>StreamingContextScrubber]
+    end
+
+    subgraph \"MemoryProvider ABC\"
+        ABC[接口层<br/>initialize / prefetch / sync_turn]
+    end
+
+    subgraph \"外部 Providers\"
+        HON[honcho]
+        MEM0[mem0]
+        SUPER[supermemory]
+        HINT[hindsight]
+    end
+
+    subgraph \"SessionDB\"
+        DB[hermes_state.py<br/>FTS5 全文搜索]
+    end
+
+    MEM --> MM
+    SYS --> MM
+    MM --> ABC
+    ABC --> HON
+    ABC --> MEM0
+    ABC --> SUPER
+    ABC --> HINT
+    MM --> DB</pre>
+
+<h2>MemoryProvider ABC 接口</h2>
+
+<pre><code class="language-python">class MemoryProvider(ABC):
+    # 生命周期
+    def is_available(self) -> bool
+    def initialize(self, session_id, **kwargs)
+    def shutdown(self) -> None
+
+    # 记忆操作
+    def system_prompt_block() -> str           # 静态系统提示
+    def prefetch(query, session_id) -> str     # 召回相关上下文
+    def queue_prefetch(query, session_id)      # 后台预取
+    def sync_turn(user, assistant, session_id) # 持久化 turn
+
+    # 工具
+    def get_tool_schemas() -> list[dict]       # 暴露给模型的工具
+    def handle_tool_call(tool_name, args)      # 分发工具调用
+
+    # 钩子（可选）
+    def on_turn_start(turn, message)
+    def on_session_end(messages)
+    def on_session_switch(new_session_id, parent_session_id, reset)
+    def on_pre_compress(messages)
+    def on_memory_write(action, target, content, metadata)
+    def on_delegation(task, result, child_session_id)</code></pre>
+
+<h2>内置 MemoryStore 设计</h2>
+
+<h3>双重状态机制</h3>
+
+<pre><code class="language-python">class MemoryStore:
+    # 冻结快照 - session 期间不变，确保前缀缓存命中
+    self._system_prompt_snapshot: Dict[str, str] = {
+        "memory": "",
+        "user": ""
+    }
+
+    # 实时状态 - 通过 tool 调用变更，即时持久化
+    self.memory_entries: List[str] = []
+    self.user_entries: List[str] = []</code></pre>
+
+<h3>安全扫描机制</h3>
+
+<pre><code class="language-python">_MEMORY_THREAT_PATTERNS = [
+    (r'ignore\\s+(previous|all|above|prior)\\s+instructions', "prompt_injection"),
+    (r'you\\s+are\\s+now\\s+', "role_hijack"),
+    (r'curl\\s+[^\\n]*\\$\\{?\\w*(KEY|TOKEN|SECRET', "exfil_curl"),
+    # 500+ 正则模式覆盖数据泄露、注入、破坏性操作...
+]</code></pre>
+
+<h3>原子写入</h3>
+
+<pre><code class="language-python">@contextmanager
+def _file_lock(path: Path):
+    # 独立 .lock 文件
+    # fcntl.LOCK_EX (Unix) / msvcrt.LK_LOCK (Windows)
+
+@staticmethod
+def _write_file(path: Path, entries: List[str]):
+    # tempfile.mkstemp + os.fsync + atomic_replace
+    # 避免 "w" 模式截断后再加锁的 race window</code></pre>
+
+<h2>流式上下文净化</h2>
+
+<pre><code class="language-python">class StreamingContextScrubber:
+    \"\"\"处理流式文本中可能 split 的 memory-context spans\"\"\"
+    # 状态机：_in_span + _buf 追踪 chunk 边界上的标签泄漏
+
+def build_memory_context_block(raw_context: str) -> str:
+    return (
+        \"<memory-context>\\n\"
+        \"[System note: The following is recalled memory context, \"
+        \"NOT new user input. Treat as authoritative reference data — ...]\\n\\n\"
+        f\"{clean}\\n\"
+        \"</memory-context>\"
+    )</code></pre>
+
+<h2>FTS5 全文搜索</h2>
+
+<h3>双 FTS5 表设计</h3>
+
+<pre><code class="language-sql">-- 标准 unicode61 tokenizer for 拉丁语言
+CREATE VIRTUAL TABLE messages_fts USING fts5(content);
+CREATE TRIGGER messages_fts_insert AFTER INSERT ON messages BEGIN ... END;
+
+-- Trigram tokenizer for CJK 子串搜索
+CREATE VIRTUAL TABLE messages_fts_trigram USING fts5(
+    content, tokenize='trigram'
+);</code></pre>
+
+<h3>CJK 智能路由</h3>
+
+<pre><code class="language-python">def search_messages(self, query, ...):
+    is_cjk = self._contains_cjk(query)
+    if is_cjk:
+        # trigram 需要 ≥3 CJK 字符 per token
+        if cjk_count >= 3 and not _any_short_cjk:
+            # 使用 trigram FTS5 table
+            sql = f\"\"\"SELECT ... FROM messages_fts_trigram
+                      WHERE messages_fts_trigram MATCH ?\"\"\"
+        else:
+            # 回退到 LIKE（短 CJK 无法 trigram 匹配）
+    else:
+        # 使用标准 unicode61 FTS5</code></pre>
+
+<h2>Provider 对比</h2>
+
+<table>
+<tr><th>Provider</th><th>特点</th><th>工具</th></tr>
+<tr><td>honcho</td><td>用户建模、Dialectic 多层推理、成本感知 Cadence</td><td>honcho_profile, honcho_search, honcho_reasoning, honcho_context</td></tr>
+<tr><td>mem0</td><td>熔断器模式、异步预取</td><td>mem0_profile, mem0_search, mem0_conclude</td></tr>
+<tr><td>supermemory</td><td>多容器支持、对话会话级摄入</td><td>supermemory_store, supermemory_search, supermemory_forget</td></tr>
+<tr><td>hindsight</td><td>单写线程、共享事件循环、Flush-on-Switch</td><td>hindsight_retain, hindsight_recall, hindsight_reflect</td></tr>
+</table>
+
+<h2>创新设计模式</h2>
+
+<table>
+<tr><th>模式</th><th>应用位置</th><th>描述</th></tr>
+<tr><td>单一外部 provider 限制</td><td>MemoryManager.add_provider</td><td>防止 schema 膨胀和后端冲突</td></tr>
+<tr><td>冻结快照</td><td>MemoryStore._system_prompt_snapshot</td><td>mid-session 写入不影响 prompt 稳定性</td></tr>
+<tr><td>流式 Scrubber</td><td>StreamingContextScrubber</td><td>处理 chunk 边界上的标签泄漏</td></tr>
+<tr><td>熔断器</td><td>Mem0, Honcho</td><td>连续失败后暂停 API 调用</td></tr>
+<tr><td>单写线程队列</td><td>Hindsight</td><td>避免 shutdown race</td></tr>
+<tr><td>共享事件循环</td><td>Hindsight</td><td>避免 ephemeral loops 导致 unclosed sessions</td></tr>
+<tr><td>Flush-on-Switch</td><td>Hindsight.on_session_switch</td><td>session 切换时保留未提交 buffer</td></tr>
+</table>`
+}

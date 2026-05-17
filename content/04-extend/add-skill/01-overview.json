@@ -1,0 +1,5 @@
+{
+    "title": "添加 Skill",
+    "path": ["扩展机制", "添加 Skill", "概述"],
+    "content": "<h1>添加 Skill</h1><p>Skill 是自然语言指令 + 工具调用的组合，适合包装外部 CLI 或 API。</p><h2>决策：Skill 还是 Tool？</h2><table><tr><th>做成 Skill</th><th>做成 Tool</th></tr><tr><td>用指令 + 现有工具实现</td><td>需要端到端 API key 管理</td></tr><tr><td>包装外部 CLI</td><td>需要精确执行的二进制/流数据处理</td></tr><tr><td>不需要自定义 Python 逻辑</td><td>需要实时事件处理</td></tr></table><h2>Skill 目录结构</h2><pre><code class=\"language-text\">skills/my-skill/\n├── SKILL.md           # 必须：技能定义\n├── README.md          # 可选：详细文档\n├── scripts/           # 可选：辅助脚本\n└── requirements.txt   # 可选：依赖</code></pre><h2>SKILL.md frontmatter</h2><pre><code class=\"language-yaml\">---\nname: my-skill\ndescription: 简短描述（≤60字符）\nversion: 1.0.0\nauthor: Your Name\nlicense: MIT\nplatforms: [macos, linux, windows]\nmetadata:\n  hermes:\n    tags: [Category, Subcategory]\n---\n\n# Skill Instructions\n\nYour skill instructions in Markdown...</code></pre><h2>Skill 存放位置</h2><ul><li><strong>广泛适用</strong> → <code>skills/</code>（内置）</li><li><strong>官方但专业</strong> → <code>optional-skills/</code>（默认不启用）</li><li><strong>社区</strong> → Skills Hub</li></ul>"
+}

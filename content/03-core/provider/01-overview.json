@@ -1,0 +1,5 @@
+{
+    "title": "Provider 适配器",
+    "path": ["核心子系统", "Provider 适配器", "概述"],
+    "content": "<h1>Provider 适配器</h1><p>Hermes Agent 通过统一的 <code>AIAgent</code> 接口支持多种 LLM Provider，底层通过适配器模式实现。</p><h2>支持的 Provider</h2><table><tr><th>Provider</th><th>适配器文件</th><th>说明</th></tr><tr><td>OpenAI</td><td>内置</td><td>默认支持</td></tr><tr><td>Anthropic</td><td><code>agent/anthropic_adapter.py</code></td><td>Claude 系列</td></tr><tr><td>AWS Bedrock</td><td><code>agent/bedrock_adapter.py</code></td><td>Claude on AWS</td></tr><tr><td>Google Gemini</td><td><code>agent/gemini_native_adapter.py</code></td><td>Gemini 原生</td></tr><tr><td>OpenRouter</td><td><code>agent/openrouter_client.py</code></td><td>聚合 200+ 模型</td></tr></table><h2>架构图</h2><pre class=\"mermaid\">graph TB\n    AIAgent[AIAgent<br/>run_agent.py]\n    CLIENT[auxiliary_client.py]\n    \n    subgraph \"Adapters\"\n        ANTH[anthropic_adapter]\n        BED[bedrock_adapter]\n        GEM[gemini_native_adapter]\n    end\n    \n    AIAgent --> CLIENT\n    CLIENT --> ANTH\n    CLIENT --> BED\n    CLIENT --> GEM</pre><h2>适配器职责</h2><ul><li>API 请求构造</li><li>响应标准化</li><li>错误处理和重试</li></ul>"
+}

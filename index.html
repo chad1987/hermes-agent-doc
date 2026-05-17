@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hermes Agent 学习指南</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="logo">
+                <h1>Hermes Agent</h1>
+                <p>学习指南</p>
+            </div>
+            <nav class="nav-tree">
+                <div class="nav-section">
+                    <div class="nav-header" data-toggle="section">
+                        <span class="icon">📚</span>
+                        <span>项目概述</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#" class="nav-item active" data-page="01-overview/01-what-is-hermes">什么是 Hermes Agent</a>
+                        <a href="#" class="nav-item" data-page="01-overview/02-core-features">核心特性</a>
+                        <a href="#" class="nav-item" data-page="01-overview/03-quick-start">快速入门</a>
+                    </div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-header" data-toggle="section">
+                        <span class="icon">🏗️</span>
+                        <span>架构全景</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#" class="nav-item" data-page="02-architecture/01-entry-points">入口点</a>
+                        <a href="#" class="nav-item" data-page="02-architecture/02-core-loop">核心循环</a>
+                        <a href="#" class="nav-item" data-page="02-architecture/03-dependency-chain">依赖链</a>
+                    </div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-header" data-toggle="section">
+                        <span class="icon">⚙️</span>
+                        <span>核心子系统</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#" class="nav-item" data-page="03-core/tool-system/01-overview">Tool 系统</a>
+                        <a href="#" class="nav-item" data-page="03-core/provider/01-overview">Provider 适配器</a>
+                        <a href="#" class="nav-item" data-page="03-core/cli/01-overview">CLI 命令系统</a>
+                        <a href="#" class="nav-item" data-page="03-core/gateway/01-overview">Gateway 消息网关</a>
+                        <a href="#" class="nav-item" data-page="03-core/skills/01-overview">Skills 系统</a>
+                        <a href="#" class="nav-item" data-page="03-core/memory/01-overview">Memory 记忆系统</a>
+                        <a href="#" class="nav-item" data-page="03-core/memory/02-deep-dive">Memory 深入理解</a>
+                        <a href="#" class="nav-item" data-page="03-core/closed-loop-learning/01-overview">闭环学习系统</a>
+                    </div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-header" data-toggle="section">
+                        <span class="icon">🚀</span>
+                        <span>扩展机制</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#" class="nav-item" data-page="04-extend/add-tool/01-overview">添加 Tool</a>
+                        <a href="#" class="nav-item" data-page="04-extend/add-skill/01-overview">添加 Skill</a>
+                        <a href="#" class="nav-item" data-page="04-extend/add-platform/01-overview">添加 Platform</a>
+                    </div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-header" data-toggle="section">
+                        <span class="icon">📖</span>
+                        <span>参考文档</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#" class="nav-item" data-page="05-reference/01-commands">命令索引</a>
+                        <a href="#" class="nav-item" data-page="05-reference/02-tools">工具索引</a>
+                        <a href="#" class="nav-item" data-page="05-reference/03-config">配置参考</a>
+                    </div>
+                </div>
+            </nav>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索文档...">
+            </div>
+        </aside>
+        <main class="content">
+            <div class="content-header">
+                <div class="breadcrumb" id="breadcrumb"></div>
+                <button class="theme-toggle" id="themeToggle">🌙</button>
+            </div>
+            <article class="content-body" id="contentBody">
+                <div class="loading">加载中...</div>
+            </article>
+        </main>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" onerror="console.log('Mermaid CDN failed, using fallback'); window.mermaid = {initialize: function(){}};"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Fallback if app.js doesn't load
+        window.addEventListener('DOMContentLoaded', function() {
+            if (typeof contentStore === 'undefined') {
+                document.getElementById('contentBody').innerHTML = '<div class="loading">脚本加载失败，请刷新页面</div>';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+{
+    "title": "核心循环",
+    "path": ["架构全景", "核心循环"],
+    "content": "<h1>核心循环</h1><p>Hermes Agent 的核心是一个<strong>同步循环</strong>，迭代执行 tool calls 直到模型返回文本。</p><h2>循环逻辑</h2><pre><code class=\"language-python\">while (api_call_count < self.max_iterations and self.iteration_budget.remaining > 0) \\\n        or self._budget_grace_call:\n    if self._interrupt_requested:\n        break\n    \n    response = client.chat.completions.create(\n        model=model,\n        messages=messages,\n        tools=tool_schemas\n    )\n    \n    if response.tool_calls:\n        for tool_call in response.tool_calls:\n            result = handle_function_call(tool_call.name, tool_call.args, task_id)\n            messages.append(tool_result_message(result))\n        api_call_count += 1\n    else:\n        return response.content</code></pre><h2>消息格式</h2><p>使用 OpenAI 格式，推理内容存储在 <code>assistant_msg['reasoning']</code>。</p><h2>中断机制</h2><div class=\"info-box\">循环支持<strong>中断请求</strong> (<code>_interrupt_requested</code>)，用户可以随时停止当前工作。</div><h2>预算控制</h2><ul><li><code>max_iterations</code>: 最大 tool-call 迭代次数</li><li><code>iteration_budget.remaining</code>: 剩余预算</li></ul>"
+}
