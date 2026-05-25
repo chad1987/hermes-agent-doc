@@ -70,18 +70,168 @@ UI 框架: Rich + prompt_toolkit
             title: '核心特性',
             path: ['项目概述', '核心特性'],
             content: `<h1>核心特性</h1>
+<p>Hermes Agent 是唯一一个内置学习循环的 AI Agent，区别于传统 Agent 的关键在于它能从经验中学习并持续改进。</p>
+<h2>真实终端界面 (TUI)</h2>
+<p>完整的终端用户界面，提供专业级交互体验：</p>
+<ul>
+<li><strong>多行编辑</strong> — Shift+Enter 换行，跨行输入复杂命令</li>
+<li><strong>Slash 命令补全</strong> — 输入 <code>/</code> 自动弹出命令菜单</li>
+<li><strong>对话历史</strong> — 上下箭头切换历史记录，FTS5 搜索</li>
+<li><strong>中断重定向</strong> — Ctrl+C 优雅中断，不丢失上下文</li>
+<li><strong>流式工具输出</strong> — 实时显示工具执行进度</li>
+</ul>
+<h3>代码示例：TUI 启动流程</h3>
+<pre><code class="language-python"># hermes_cli/main.py 核心流程
+from hermes_cli.cli import HermesCLI
+
+async def main():
+    cli = HermesCLI()
+    await cli.run()
+
+# 或使用 run_agent.py 直接编程调用
+from run_agent import AIAgent
+
+agent = AIAgent(
+    model="gpt-4o",
+    provider="openai",
+    max_iterations=90
+)
+result = await agent.run("帮我分析这个代码库的结构")
+print(result)</code></pre>
+<h2>多平台运行</h2>
+<p>一个进程同时连接 22+ 消息平台，无需分别部署：</p>
 <table>
-<tr><th>特性</th><th>描述</th></tr>
-<tr><td>真实终端界面</td><td>完整的 TUI，支持多行编辑、slash 命令补全、对话历史、中断重定向、流式工具输出</td></tr>
-<tr><td>多平台运行</td><td>Telegram、Discord、Slack、WhatsApp、Signal，一个进程支持所有平台</td></tr>
-<tr><td>闭环学习系统</td><td>Agent 管理的记忆 + 定期提醒 + 自主技能创建 + 技能自改进 + FTS5 会话搜索</td></tr>
-<tr><td>调度自动化</td><td>内置 cron 调度器，投递到任意平台。每日报告、每周审计，全部自然语言配置</td></tr>
-<tr><td>委托与并行</td><td>生成孤立子 Agent 处理并行工作流。RPC 调用工具，零上下文成本折叠多步流程</td></tr>
-<tr><td>任意环境运行</td><td>本地、Docker、SSH、Modal、Daytona、Vercel Sandbox。Serverless 持久化，空闲时几乎零成本</td></tr>
-<tr><td>研究就绪</td><td>批量轨迹生成、轨迹压缩，训练下一代 tool-calling 模型</td></tr>
+<tr><th>平台</th><th>状态</th><th>特色功能</th></tr>
+<tr><td>Telegram</td><td>✅ 稳定</td><td>流式编辑、安全重定向</td></tr>
+<tr><td>Discord</td><td>✅ 稳定</td><td>角色白名单、线程支持</td></tr>
+<tr><td>Slack</td><td>✅ 稳定</td><td>OAuth 安装</td></tr>
+<tr><td>WhatsApp</td><td>✅ 稳定</td><td>陌生人拒绝</td></tr>
+<tr><td>Signal</td><td>✅ 稳定</td><td>E2E 加密</td></tr>
+<tr><td>Matrix</td><td>✅ 稳定</td><td>去中心化</td></tr>
+<tr><td>飞书</td><td>✅ 稳定</td><td>机器人 API</td></tr>
 </table>
+<h3>架构图</h3>
+<pre class="mermaid">graph TB
+    GW[GatewayRunner]
+    GW --> TG[Telegram]
+    GW --> DC[Discord]
+    GW --> SL[Slack]
+    GW --> WA[WhatsApp]
+    GW --> MX[Matrix]
+    TG & DC & SL & WA & MX --> AGENT[AIAgent]</pre>
+<h2>闭环学习系统</h2>
+<p>这是 Hermes Agent 区别于其他 Agent 的核心特性：</p>
+<h3>核心组件</h3>
+<table>
+<tr><th>组件</th><th>文件</th><th>作用</th></tr>
+<tr><td>MemoryManager</td><td>memory_manager.py</td><td>协调内置存储 + 外部 provider</td></tr>
+<tr><td>SkillManage</td><td>skills/skill_manage.py</td><td>技能自动创建/改进</td></tr>
+<tr><td>Curator</td><td>curator.py</td><td>技能策展生命周期</td></tr>
+<tr><td>Dreaming</td><td>dreaming.py</td><td>夜间记忆整合</td></tr>
+</table>
+<h3>学习流程</h3>
+<pre class="mermaid">graph LR
+    A[用户任务] --> B{AIAgent}
+    B --> C[工具调用]
+    C --> D[成功完成]
+    D --> E{复杂任务?}
+    E -->|5+调用| F[自动创建Skill]
+    E -->|用户纠正| G[技能改进]
+    F --> H[.usage.json]
+    G --> H
+    H --> I[Curator策展]
+    I --> J[合并/归档]
+    J --> F</code></pre>
+<h3>技能自动创建触发条件</h3>
+<pre><code class="language-python"># skill_manage.py 触发逻辑
+TRIGGERS = [
+    "complex_task",      # 5+ 次 tool 调用
+    "error_recovery",    # 克服错误
+    "user_correction",   # 用户纠正有效
+    "nontrivial_workflow", # 非平凡工作流
+    "explicit_request"  # 用户要求记住
+]</code></pre>
+<h2>调度自动化</h2>
+<p>内置 cron 调度器，自然语言配置：</p>
+<pre><code class="language-bash"># 设置每日报告
+/hermes cron add "每天早上9点发送项目状态报告" --platform telegram
+
+# 设置每周审计
+/hermes cron add "每周一分析上周的日志并生成报告" --platform email
+
+# 查看定时任务
+/hermes cron list</code></pre>
+<h3>Cron 配置结构</h3>
+<pre><code class="language-yaml"># ~/.hermes/crontabs/default.yaml
+cron_jobs:
+  - name: "daily-report"
+    schedule: "0 9 * * *"  # 每天9点
+    prompt: "分析昨天的工作生成报告"
+    platform: telegram
+    enabled: true
+  - name: "weekly-audit"
+    schedule: "0 10 * * 1"  # 每周一10点
+    prompt: "分析上周日志，生成审计报告"
+    platform: email
+    enabled: true</code></pre>
+<h2>委托与并行</h2>
+<p>生成孤立子 Agent 处理并行工作流：</p>
+<pre><code class="language-python"># delegate_task 工具使用
+result = await agent.run("""
+并行完成以下任务：
+1. 分析 src/ 目录的代码结构
+2. 检查 tests/ 目录的测试覆盖率
+3. 生成项目文档
+""")
+
+# 子 Agent 独立运行，共享工具集
+# 通过 RPC 调用主 Agent 的工具</code></pre>
+<h3>委托架构</h3>
+<pre class="mermaid">graph TB
+    MAIN[主AIAgent]
+    MAIN -->|fork| SUB1[子Agent-1]
+    MAIN -->|fork| SUB2[子Agent-2]
+    MAIN -->|fork| SUB3[子Agent-3]
+    SUB1 -->|RPC| MAIN
+    SUB2 -->|RPC| MAIN
+    SUB3 -->|RPC| MAIN
+    SUB1 & SUB2 & SUB3 --> DB[(SQLite)]</pre>
+<h2>任意环境运行</h2>
+<table>
+<tr><th>环境</th><th>配置</th><th>适用场景</th></tr>
+<tr><td>本地</td><td>默认</td><td>开发调试</td></tr>
+<tr><td>Docker</td><td>docker_extra_args</td><td>生产部署</td></tr>
+<tr><td>SSH</td><td>host/port/user</td><td>远程服务器</td></tr>
+<tr><td>Modal</td><td>modal_config</td><td>Serverless</td></tr>
+<tr><td>Daytona</td><td>daytona_config</td><td>云IDE</td></tr>
+</table>
+<h2>研究就绪</h2>
+<p>批量轨迹生成用于训练下一代 tool-calling 模型：</p>
+<pre><code class="language-python"># 轨迹生成配置
+from run_agent import AIAgent
+
+agent = AIAgent(
+    model="gpt-4o",
+    trajectory_mode=True,  # 启用轨迹记录
+    trajectory_output="./trajectories/"
+)
+
+# 批量处理任务
+tasks = ["任务1", "任务2", "任务3..."]
+for task in tasks:
+    result = await agent.run(task)
+    agent.save_trajectory(f"{task_id}.json")</code></pre>
 <h2>与 OpenClaw 的差异</h2>
-<div class="info-box">Hermes Agent 是 OpenClaw 的精神继承者，但完全重写。迁移指南: <code>hermes claw migrate</code></div>`
+<div class="info-box">Hermes Agent 是 OpenClaw 的精神继承者，但完全重写。主要区别：</div>
+<table>
+<tr><th>特性</th><th>OpenClaw</th><th>Hermes Agent</th></tr>
+<tr><td>学习系统</td><td>❌ 无</td><td>✅ 闭环学习</td></tr>
+<tr><td>记忆系统</td><td>基础</td><td>FTS5 + Provider</td></tr>
+<tr><td>技能创建</td><td>❌ 无</td><td>✅ 自动创建</td></tr>
+<tr><td>策展系统</td><td>❌ 无</td><td>✅ Curator</td></tr>
+<tr><td>多平台</td><td>有限</td><td>22+ 平台</td></tr>
+</table>
+<div class="info-box">迁移指南: <code>hermes claw migrate</code></div>`
         },
         '01-overview/03-quick-start': {
             title: '快速入门',
@@ -889,6 +1039,124 @@ CREATE VIRTUAL TABLE messages_fts_trigram USING fts5(content, tokenize='trigram'
 hermes curator run      # 触发策展运行
 hermes curator pin       # 固定技能
 hermes curator restore  # 恢复归档技能</code></pre>`
+        },
+        '06-releases/01-all-releases': {
+            title: 'Release 版本',
+            path: ['Release 版本', '全部版本'],
+            content: `<h1>Release 版本历史</h1>
+<p>Hermes Agent 的正式发布版本记录，涵盖从 v0.10.0 到最新的 v0.14.0。</p>
+<h2>版本概览</h2>
+<table>
+<tr><th>版本</th><th>代号</th><th>发布日期</th><th>主要亮点</th></tr>
+<tr><td>v0.14.0</td><td>2026.5.16</td><td>2026-05-16</td><td>Native Windows、19s冷启动优化、180x browser_console、LSP语义诊断</td></tr>
+<tr><td>v0.13.0</td><td>The Tenacity Release</td><td>2026-04-13</td><td>多Agent Kanban、/goal 命令、8项安全修复</td></tr>
+<tr><td>v0.12.0</td><td>2026.4.30</td><td>2026-04-03</td><td>ProviderProfile ABC、Skills Hub</td></tr>
+<tr><td>v0.11.0</td><td>2026.4.23</td><td>2026-03-28</td><td>飞书平台、Weixin优化</td></tr>
+<tr><td>v0.10.0</td><td>2026.4.16</td><td>2026-03-17</td><td>核心架构稳定</td></tr>
+</table>
+<h2>v0.14.0 (2026.5.16) — 当前版本</h2>
+<h3>核心改进</h3>
+<ul>
+<li><strong>Native Windows 支持</strong> (早期Beta) — CLI/Gateway/TUI/Tools 全链路原生Windows路径</li>
+<li><strong>冷启动优化</strong> — Skills缓存 + 懒加载飞书 + 启动时不发Nous HTTP请求，减少19秒</li>
+<li><strong>工具配置加速</strong> — hermes tools 全平台从14秒降至&lt;1.5秒</li>
+<li><strong>browser_console 180x加速</strong> — 通过supervisor持久化CDP WebSocket</li>
+</ul>
+<h3>新功能</h3>
+<ul>
+<li><strong>Per-turn文件变异验证器</strong> — 每次工具调用后验证文件变更</li>
+<li><strong>GLM模型工具调用强制</strong> — 针对GLM模型的特殊处理</li>
+<li><strong>OAuth代理</strong> — 本地OpenAI兼容代理，Codex/Aider/Cline可连接Claude Pro/ChatGPT Pro</li>
+<li><strong>LINE Messaging API</strong> — 新平台插件</li>
+<li><strong>x_search工具</strong> — 支持OAuth或API-key认证</li>
+</ul>
+<h3>安全性</h3>
+<ul>
+<li>重定向默认开启</li>
+<li>Discord角色白名单基于guild作用域</li>
+<li>WhatsApp默认拒绝陌生人</li>
+<li>auth.json和MCP OAuth的TOCTOU窗口关闭</li>
+<li>浏览器强制云元数据SSRF防护</li>
+<li>cron prompt注入扫描</li>
+<li>hermes debug share上传时重定向</li>
+</ul>
+<h3>性能数据</h3>
+<table>
+<tr><th>指标</th><th>优化前</th><th>优化后</th><th>提升</th></tr>
+<tr><td>hermes cold start</td><td>~25s</td><td>~6s</td><td>19s减少</td></tr>
+<tr><td>hermes tools (All)</td><td>14s</td><td>&lt;1.5s</td><td>9x+</td></tr>
+<tr><td>browser_console</td><td>慢</td><td>快180x</td><td>180x</td></tr>
+</table>
+<h2>v0.13.0 (2026.4.13) — The Tenacity Release</h2>
+<h3>多Agent Kanban</h3>
+<p>Spin up一个持久化看板，让多个Hermes workers拾取任务、交接、完成：</p>
+<ul>
+<li>心跳检测 + 回收 + 僵尸检测</li>
+<li>任务不完整退出时自动阻塞</li>
+<li>per-task重试 + 幻觉恢复</li>
+</ul>
+<h3>/goal 命令</h3>
+<p>锁定Agent目标，跨turn保持任务专注：</p>
+<pre><code class="language-bash">/goal 完成代码审查并生成报告
+# Agent会记住目标并在多轮对话中持续推进</code></pre>
+<h3>安全修复 (8项P0)</h3>
+<ul>
+<li>重定向默认开启</li>
+<li>Discord角色白名单guild作用域 (CVSS 8.1 跨guild DM绕过修复)</li>
+<li>WhatsApp默认拒绝陌生人</li>
+<li>auth.json和MCP OAuth的TOCTOU窗口关闭</li>
+<li>浏览器强制云元数据SSRF底线</li>
+<li>cron prompt注入扫描</li>
+<li>hermes debug share上传时重定向</li>
+</ul>
+<h3>Skills媒体路由</h3>
+<pre><code class="language-markdown">
+[[as_document]]
+skill: my-skill
+format: pdf
+</code></pre>
+<h3>ProviderProfile ABC</h3>
+<p>推理provider成为可插拔表面：</p>
+<pre><code class="language-python"># 新插件结构
+plugins/
+  model-providers/
+    my-provider/
+      plugin.yaml
+      provider.py  # 实现 ProviderProfile ABC</code></pre>
+<h2>v0.12.0 (2026.4.30)</h2>
+<ul>
+<li>ProviderProfile ABC + plugins/model-providers/</li>
+<li>list_picker_providers — 凭证过滤选择器</li>
+<li>skill_commands缓存 — 平台范围变化时重新扫描</li>
+<li>AGENTS.md — curator/cron/delegation/toolsets</li>
+</ul>
+<h2>v0.11.0 (2026.4.23)</h2>
+<ul>
+<li>飞书平台稳定</li>
+<li>/sethome在Matrix和Email跨重启持久化</li>
+<li>微信消息去重 (内容指纹)</li>
+<li>QQBot优化</li>
+</ul>
+<h2>v0.10.0 (2026.4.16)</h2>
+<p>核心架构稳定，基础框架完成。</p>
+<h2>版本迁移</h2>
+<pre><code class="language-bash"># 从旧版本升级
+hermes update
+
+# 从OpenClaw迁移
+hermes claw migrate
+
+# 查看当前版本
+hermes --version</code></pre>
+<h2>贡献者统计</h2>
+<table>
+<tr><th>指标</th><th>v0.14.0</th></tr>
+<tr><td>Commits</td><td>808+</td></tr>
+<tr><td>PRs Merged</td><td>633+</td></tr>
+<tr><td>Files Changed</td><td>1393</td></tr>
+<tr><td>Insertions</td><td>165,061</td></tr>
+</table>
+<div class="info-box">完整发布说明请查看 <a href="https://github.com/NousResearch/hermes-agent/releases" target="_blank">GitHub Releases</a></div>`
         }
     };
 
