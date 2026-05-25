@@ -1040,6 +1040,148 @@ hermes curator run      # 触发策展运行
 hermes curator pin       # 固定技能
 hermes curator restore  # 恢复归档技能</code></pre>`
         },
+        '03-core/dreaming/01-overview': {
+            title: 'Dreaming 组件',
+            path: ['核心子系统', 'Dreaming 组件', '概述'],
+            content: `<h1>Dreaming 组件</h1>
+<p>Dreaming 是 Brain 知识管理系统的"夜间自维护"模块，参考 gbrain Dream Cycle 设计。核心思想是让大脑过夜后自动变聪明。</p>
+<h2>为什么需要 Dreaming</h2>
+<p>知识管理不是一次性工作。随着时间推移，会产生：</p>
+<ul>
+<li>断链（orphan pages）</li>
+<li>重复/冲突的知识</li>
+<li>过时的 compiled truth</li>
+<li>未被引用的实体</li>
+<li>积累的原始素材（raw）未被提炼</li>
+</ul>
+<p>Dreaming 在每天 01:00 自动运行，将这些维护工作从手动变为自动。</p>
+<h2>架构图</h2>
+<pre class="mermaid">graph TB
+    subgraph "Trigger"
+        SCHED[01:00 Cron]
+        CHK{今日有变更?}
+    end
+    subgraph "Phases"
+        L[1-Lint]
+        BL[2-Backlinks]
+        SY[3-Synthesize]
+        EX[4-Extract]
+        PT[5-Patterns]
+        EW[6-Emotional Weight]
+        CO[7 Consolidate]
+        EM[8-Embed]
+        OR[9-Orphans]
+        PU[10-Purge]
+        SYNC[11-Sync]
+    end
+    SCHED --> CHK
+    CHK -->|有变更| L
+    CHK -->|无变更| SILENT[SILENT exit]
+    L --> BL
+    BL --> SY
+    SY --> EX
+    EX --> PT
+    PT --> EW
+    EW --> CO
+    CO --> EM
+    EM --> OR
+    OR --> PU
+    PU --> SYNC</pre>
+<h2>11 阶段详解</h2>
+<h3>Phase 1: Lint — AI 工件检测 + 格式审计</h3>
+<p>检测 wiki 页面的格式问题和 AI 生成内容特征。</p>
+<pre><code class="language-python">AI_BLOAT_PATTERNS = [
+    r"不断地", r"持续地", r"不断地.*优化",
+    r"显著地.*提升", r"有效地.*解决",
+    r"本文.*探讨", r"本文.*研究", r"具有.*重要意义",
+    r"不言而喻", r"毋庸置疑", r"毫无疑问",
+]</code></pre>
+<p>检测内容：frontmatter 完整性、Compiled Truth 和 Timeline 章节存在性、AI bloat 模式。</p>
+<h3>Phase 2: Backlinks — 断链修复 + 孤儿承接页</h3>
+<p>扫描 <code>[[双链]]</code> 和 <code>[[display text|page name]]</code> 格式，找出悬空引用。</p>
+<pre><code class="language-python"># 匹配 [[Page Name]] 或 [[display text|Page Name]]
+all_links = re.findall(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]', content)
+# 排除 URL/路径形式
+if '/' in target or target.endswith('.md'):
+    continue</code></pre>
+<h3>Phase 3: Synthesize — 会议记录 → 反思页</h3>
+<p>扫描 <code>raw/meetings/</code>，调用 LLM 生成周反思页。</p>
+<pre><code class="language-python">prompt = f"""你是一个知识管理专家。本周有以下会议记录：
+{combined[:8000]}
+请完成以下工作：
+1. 识别跨文档的共同主题/结论
+2. 生成一个「周反思页」，包含：
+   - ## Compiled Truth：本周对这个主题的核心认知
+   - ## Timeline：本周演变过程
+3. 如果某个认知与已有 wiki 页面冲突，在 Timeline 中标注「观点更新」"""</code></pre>
+<h3>Phase 4: Extract — 增量提取实体 + frontmatter</h3>
+<p>从本周新增的 raw 文件中提取 <code>[[双链]]</code> 引用，更新对应人物页面的 Timeline。</p>
+<pre><code class="language-python"># 追加 Timeline 条目
+new_entry = f"- {today} | 来源: {f.parent.name}/{f.name} | 在原始资料中被提及\n"
+if "## Timeline" in page_content:
+    page_content = page_content.replace("## Timeline", f"## Timeline\n{new_entry}")</code></pre>
+<h3>Phase 5: Patterns — 跨会话主题识别</h3>
+<p>词频统计，识别本周频繁出现的关键词/主题。</p>
+<pre><code class="language-python"># 中文词频统计
+words = re.findall(r'[\u4e00-\u9fff]+', all_text)
+freq = {}
+for w in words:
+    if len(w) >= 2 and w not in stop_words:
+        freq[w] = freq.get(w, 0) + 1</code></pre>
+<h3>Phase 6: Emotional Weight — 页面权重重算</h3>
+<p>根据引用次数 + 更新时间计算页面权重，写入 frontmatter。</p>
+<pre><code class="language-python"># 权重 = 入度 * 10 + (距今天数越小得分越高)
+weight = inbound * 10 + max(0, 30 - updated_days)</code></pre>
+<h3>Phase 7: Consolidate — 多笔记合并为权威 CT</h3>
+<p>检测同名/别名实体页面，调用 LLM 合并为权威 Compiled Truth。</p>
+<pre><code class="language-python">prompt = f"""你是一个知识管理专家。合并以下关于同一实体的多个笔记：
+- 保留所有 Timeline 条目
+- 矛盾事实保留在 Timeline 中标注「观点冲突」
+- 输出符合 Brain schema.md 格式"""</code></pre>
+<h3>Phase 8: Embed — 向量化索引更新</h3>
+<p>为 wiki 页面生成/更新向量化索引文件（meta.json）。</p>
+<pre><code class="language-python"># 提取 Compiled Truth 作为 embedding 文本
+ct_match = re.search(r"## Compiled Truth\s*\n(.*?)(?=\n##|\n---|\\Z)", content, re.DOTALL)
+text = ct_match.group(1) if ct_match else content[:1000]
+# 生成简单 hash 作为 ID
+page_hash = hashlib.md5(text.encode()).hexdigest()[:16]</code></pre>
+<h3>Phase 9: Orphans — 孤立页面检测</h3>
+<p>检测没有被任何其他页面引用的页面（0 inbound links）。</p>
+<h3>Phase 10: Purge — 软删除清理</h3>
+<p>清理 <code>.brain/trash/</code> 中超过 30 天的文件。</p>
+<h3>Phase 11: Sync — Git push</h3>
+<p>仅在所有阶段都成功时执行 push。</p>
+<h2>调度配置</h2>
+<table>
+<tr><th>项</th><th>值</th></tr>
+<tr><td>Cron 表达式</td><td><code>0 1 * * *</code></td></tr>
+<tr><td>执行时间</td><td>每天 01:00</td></tr>
+<tr><td>触发条件</td><td>raw/ 或 wiki/ 当日有变更才执行</td></tr>
+<tr><td>无变更输出</td><td><code>[SILENT]</code></td></tr>
+</table>
+<h3>集成到 Hermes Cron</h3>
+<pre><code class="language-bash"># ~/.hermes/crontabs/default.yaml
+cron_jobs:
+  - name: "brain-dream-cycle"
+    schedule: "0 1 * * *"
+    command: "python3 /Users/frank/Project/Brain/scripts/brain-dream-cycle.py"
+    enabled: true</code></pre>
+<h2>与 Hermes Agent 的关系</h2>
+<p>Dreaming 虽然是 Brain 的组件，但与 Hermes Agent 紧密集成：</p>
+<ul>
+<li><strong>闭环学习</strong>：Dreaming 是闭环学习的"夜间执行器"</li>
+<li><strong>技能策展</strong>：Curator 的后台审查通过 Dreaming 触发</li>
+<li><strong>知识沉淀</strong>：raw 素材通过 Dreaming 提炼为 wiki 知识</li>
+</ul>
+<h2>源码位置</h2>
+<p><code>/Users/frank/Project/Brain/scripts/brain-dream-cycle.py</code> (807 行)</p>
+<h2>扩展阅读</h2>
+<ul>
+<li><a href="https://github.com/NousResearch/Brain">Brain 知识管理系统</a></li>
+<li>闭环学习系统：<code>03-core/closed-loop-learning/01-overview</code></li>
+<li>Memory 深入理解：<code>03-core/memory/02-deep-dive</code></li>
+</ul>`
+        },
         '06-releases/01-all-releases': {
             title: 'Release 版本',
             path: ['Release 版本', '全部版本'],
