@@ -1044,142 +1044,143 @@ hermes curator restore  # 恢复归档技能</code></pre>`
             title: 'Dreaming 组件',
             path: ['核心子系统', 'Dreaming 组件', '概述'],
             content: `<h1>Dreaming 组件</h1>
-<p>Dreaming 是 Brain 知识管理系统的"夜间自维护"模块，参考 gbrain Dream Cycle 设计。核心思想是让大脑过夜后自动变聪明。</p>
+<p>Dreaming 是 Hermes Agent 的原生睡眠梦境系统，灵感来源于生物睡眠周期和 <a href="https://github.com/cALL- cOde/OpenClaw">OpenClaw</a> 的 Dreaming process。核心思想是让 Agent 在空闲时自动将会话记忆整合到长期记忆中。</p>
 <h2>为什么需要 Dreaming</h2>
-<p>知识管理不是一次性工作。随着时间推移，会产生：</p>
+<p>Hermes Agent 在每次会话中产生大量信息，但这些信息如果没有被显式保存，就会随会话结束而丢失。Dreaming 解决了这个问题：</p>
 <ul>
-<li>断链（orphan pages）</li>
-<li>重复/冲突的知识</li>
-<li>过时的 compiled truth</li>
-<li>未被引用的实体</li>
-<li>积累的原始素材（raw）未被提炼</li>
+<li><strong>自动记忆整合</strong>：无需手动保存，Dreaming 自动提取有价值的信息</li>
+<li><strong>去重与提炼</strong>：合并重复内容，提取核心知识</li>
+<li><strong>长期记忆增强</strong>：高分信息被提升到 MEMORY.md</li>
 </ul>
-<p>Dreaming 在每天 01:00 自动运行，将这些维护工作从手动变为自动。</p>
 <h2>架构图</h2>
 <pre class="mermaid">graph TB
-    subgraph "Trigger"
-        SCHED[01:00 Cron]
-        CHK{今日有变更?}
+    subgraph "3-Phase Sleep Cycle"
+        LS[Light Sleep<br/>扫描与缓存]
+        REM[REM Sleep<br/>梦境日记]
+        DS[Deep Sleep<br/>记忆整合]
     end
-    subgraph "Phases"
-        L[1-Lint]
-        BL[2-Backlinks]
-        SY[3-Synthesize]
-        EX[4-Extract]
-        PT[5-Patterns]
-        EW[6-Emotional Weight]
-        CO[7 Consolidate]
-        EM[8-Embed]
-        OR[9-Orphans]
-        PU[10-Purge]
-        SYNC[11-Sync]
+    subgraph "Memory Files"
+        SESSIONS[Session Logs]
+        DREAMS[DREAMS.md]
+        MEMORY[MEMORY.md]
     end
-    SCHED --> CHK
-    CHK -->|有变更| L
-    CHK -->|无变更| SILENT[SILENT exit]
-    L --> BL
-    BL --> SY
-    SY --> EX
-    EX --> PT
-    PT --> EW
-    EW --> CO
-    CO --> EM
-    EM --> OR
-    OR --> PU
-    PU --> SYNC</pre>
-<h2>11 阶段详解</h2>
-<h3>Phase 1: Lint — AI 工件检测 + 格式审计</h3>
-<p>检测 wiki 页面的格式问题和 AI 生成内容特征。</p>
-<pre><code class="language-python">AI_BLOAT_PATTERNS = [
-    r"不断地", r"持续地", r"不断地.*优化",
-    r"显著地.*提升", r"有效地.*解决",
-    r"本文.*探讨", r"本文.*研究", r"具有.*重要意义",
-    r"不言而喻", r"毋庸置疑", r"毫无疑问",
-]</code></pre>
-<p>检测内容：frontmatter 完整性、Compiled Truth 和 Timeline 章节存在性、AI bloat 模式。</p>
-<h3>Phase 2: Backlinks — 断链修复 + 孤儿承接页</h3>
-<p>扫描 <code>[[双链]]</code> 和 <code>[[display text|page name]]</code> 格式，找出悬空引用。</p>
-<pre><code class="language-python"># 匹配 [[Page Name]] 或 [[display text|Page Name]]
-all_links = re.findall(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]', content)
-# 排除 URL/路径形式
-if '/' in target or target.endswith('.md'):
-    continue</code></pre>
-<h3>Phase 3: Synthesize — 会议记录 → 反思页</h3>
-<p>扫描 <code>raw/meetings/</code>，调用 LLM 生成周反思页。</p>
-<pre><code class="language-python">prompt = f"""你是一个知识管理专家。本周有以下会议记录：
-{combined[:8000]}
-请完成以下工作：
-1. 识别跨文档的共同主题/结论
-2. 生成一个「周反思页」，包含：
-   - ## Compiled Truth：本周对这个主题的核心认知
-   - ## Timeline：本周演变过程
-3. 如果某个认知与已有 wiki 页面冲突，在 Timeline 中标注「观点更新」"""</code></pre>
-<h3>Phase 4: Extract — 增量提取实体 + frontmatter</h3>
-<p>从本周新增的 raw 文件中提取 <code>[[双链]]</code> 引用，更新对应人物页面的 Timeline。</p>
-<pre><code class="language-python"># 追加 Timeline 条目
-new_entry = f"- {today} | 来源: {f.parent.name}/{f.name} | 在原始资料中被提及\n"
-if "## Timeline" in page_content:
-    page_content = page_content.replace("## Timeline", f"## Timeline\n{new_entry}")</code></pre>
-<h3>Phase 5: Patterns — 跨会话主题识别</h3>
-<p>词频统计，识别本周频繁出现的关键词/主题。</p>
-<pre><code class="language-python"># 中文词频统计
-words = re.findall(r'[\u4e00-\u9fff]+', all_text)
-freq = {}
-for w in words:
-    if len(w) >= 2 and w not in stop_words:
-        freq[w] = freq.get(w, 0) + 1</code></pre>
-<h3>Phase 6: Emotional Weight — 页面权重重算</h3>
-<p>根据引用次数 + 更新时间计算页面权重，写入 frontmatter。</p>
-<pre><code class="language-python"># 权重 = 入度 * 10 + (距今天数越小得分越高)
-weight = inbound * 10 + max(0, 30 - updated_days)</code></pre>
-<h3>Phase 7: Consolidate — 多笔记合并为权威 CT</h3>
-<p>检测同名/别名实体页面，调用 LLM 合并为权威 Compiled Truth。</p>
-<pre><code class="language-python">prompt = f"""你是一个知识管理专家。合并以下关于同一实体的多个笔记：
-- 保留所有 Timeline 条目
-- 矛盾事实保留在 Timeline 中标注「观点冲突」
-- 输出符合 Brain schema.md 格式"""</code></pre>
-<h3>Phase 8: Embed — 向量化索引更新</h3>
-<p>为 wiki 页面生成/更新向量化索引文件（meta.json）。</p>
-<pre><code class="language-python"># 提取 Compiled Truth 作为 embedding 文本
-ct_match = re.search(r"## Compiled Truth\s*\n(.*?)(?=\n##|\n---|\\Z)", content, re.DOTALL)
-text = ct_match.group(1) if ct_match else content[:1000]
-# 生成简单 hash 作为 ID
-page_hash = hashlib.md5(text.encode()).hexdigest()[:16]</code></pre>
-<h3>Phase 9: Orphans — 孤立页面检测</h3>
-<p>检测没有被任何其他页面引用的页面（0 inbound links）。</p>
-<h3>Phase 10: Purge — 软删除清理</h3>
-<p>清理 <code>.brain/trash/</code> 中超过 30 天的文件。</p>
-<h3>Phase 11: Sync — Git push</h3>
-<p>仅在所有阶段都成功时执行 push。</p>
-<h2>调度配置</h2>
-<table>
-<tr><th>项</th><th>值</th></tr>
-<tr><td>Cron 表达式</td><td><code>0 1 * * *</code></td></tr>
-<tr><td>执行时间</td><td>每天 01:00</td></tr>
-<tr><td>触发条件</td><td>raw/ 或 wiki/ 当日有变更才执行</td></tr>
-<tr><td>无变更输出</td><td><code>[SILENT]</code></td></tr>
-</table>
-<h3>集成到 Hermes Cron</h3>
-<pre><code class="language-bash"># ~/.hermes/crontabs/default.yaml
-cron_jobs:
-  - name: "brain-dream-cycle"
-    schedule: "0 1 * * *"
-    command: "python3 /Users/frank/Project/Brain/scripts/brain-dream-cycle.py"
-    enabled: true</code></pre>
-<h2>与 Hermes Agent 的关系</h2>
-<p>Dreaming 虽然是 Brain 的组件，但与 Hermes Agent 紧密集成：</p>
+    LS -->|候选记忆| REM
+    REM -->|评分候选| DS
+    DS -->|提升高分| MEMORY
+    SESSIONS -->|扫描| LS</pre>
+<h2>三阶段详解</h2>
+<h3>Phase 1: Light Sleep — 扫描与缓存</h3>
+<p>Light Sleep 是梦境的入口阶段，系统扫描近期会话记录，进行去重和初步筛选。</p>
 <ul>
-<li><strong>闭环学习</strong>：Dreaming 是闭环学习的"夜间执行器"</li>
-<li><strong>技能策展</strong>：Curator 的后台审查通过 Dreaming 触发</li>
-<li><strong>知识沉淀</strong>：raw 素材通过 Dreaming 提炼为 wiki 知识</li>
+<li>扫描 <code>~/.hermes/sessions/</code> 目录下的近期会话记录</li>
+<li>识别重复出现的实体、主题、结论</li>
+<li>暂存候选记忆（Candidate Memories）供后续处理</li>
+</ul>
+<p><strong>是否写内存</strong>：否（仅扫描分析）</p>
+<h3>Phase 2: REM Sleep — 梦境日记</h3>
+<p>REM Sleep 阶段提取重复主题和模式，生成梦境日记写入 <code>DREAMS.md</code>。</p>
+<ul>
+<li>分析候选记忆中的重复模式（recurring patterns）</li>
+<li>生成梦境日记条目，记录"梦境"中的发现</li>
+<li>识别跨会话的主题一致性</li>
+</ul>
+<pre><code class="language-markdown"># DREAMS.md 示例
+## 2024-01-15 Dream Log
+- 发现用户经常询问 Kubernetes 相关问题（3次/周）
+- 识别到项目 X 和项目 Y 之间存在关联
+- 模式：每次启动服务前都会检查日志
+</code></pre>
+<p><strong>是否写内存</strong>：否（写到 DREAMS.md）</p>
+<h3>Phase 3: Deep Sleep — 记忆整合</h3>
+<p>Deep Sleep 是最关键的阶段，对候选记忆进行评分，将高分条目提升到 <code>MEMORY.md</code>。</p>
+<ul>
+<li>对候选记忆进行多维度评分</li>
+<li>根据评分决定是否提升到长期记忆</li>
+<li>更新 MEMORY.md 中的相关条目</li>
+</ul>
+<p><strong>是否写内存</strong>：是（写到 MEMORY.md）</p>
+<h2>评分系统</h2>
+<p>Deep Sleep 使用加权评分系统（0-1 范围）来评估候选记忆：</p>
+<table>
+<tr><th>维度</th><th>权重</th><th>说明</th></tr>
+<tr><td>relevance</td><td>0.30</td><td>与用户长期目标的相关性</td></tr>
+<tr><td>frequency</td><td>0.20</td><td>在会话中出现的频率</td></tr>
+<tr><td>recency</td><td>0.20</td><td>信息的新鲜度</td></tr>
+<tr><td>diversity</td><td>0.15</td><td>内容的多样性</td></tr>
+<tr><td>consolidation</td><td>0.10</td><td>与其他记忆的整合度</td></tr>
+<tr><td>richness</td><td>0.05</td><td>信息的丰富程度</td></tr>
+</table>
+<pre><code class="language-python"># 评分计算示例
+score = (
+    relevance * 0.30 +
+    frequency * 0.20 +
+    recency * 0.20 +
+    diversity * 0.15 +
+    consolidation * 0.10 +
+    richness * 0.05
+)
+# 阈值以上的候选记忆会被提升到 MEMORY.md</code></pre>
+<h2>CLI 命令</h2>
+<pre><code class="language-bash"># 手动触发梦境运行
+hermes dream run
+
+# 查看当前梦境状态
+hermes dream status
+
+# 查看梦境日记
+hermes dream diary
+
+# 清除梦境缓存（强制重新扫描）
+hermes dream clear</code></pre>
+<h2>调度配置</h2>
+<p>Dreaming 支持两种触发方式：空闲触发和定时触发。</p>
+<table>
+<tr><th>配置项</th><th>默认值</th><th>说明</th></tr>
+<tr><td>quiet_minutes</td><td>30</td><td>空闲多少分钟后触发</td></tr>
+<tr><td>schedule</td><td><code>0 3 * * *</code></td><td>Cron 表达式（默认每天凌晨3点）</td></tr>
+</table>
+<h3>完整配置示例</h3>
+<pre><code class="language-yaml"># ~/.hermes/profiles/default/config.yaml
+plugins:
+  dreaming:
+    quiet_minutes: 30
+    schedule: "0 3 * * *"
+    scoring:
+      relevance: 0.30
+      frequency: 0.20
+      recency: 0.20
+      diversity: 0.15
+      consolidation: 0.10
+      richness: 0.05
+    memory_file: "~/.hermes/memory/MEMORY.md"
+    dreams_file: "~/.hermes/memory/DREAMS.md"</code></pre>
+<h2>插件安装</h2>
+<pre><code class="language-bash"># 通过 hermes 插件管理器安装
+hermes plugin install dreaming
+
+# 或手动安装
+git clone https://github.com/Minamaged18/hermes-dreaming-plugin ~/.hermes/plugins/dreaming</code></pre>
+<h2>与 OpenClaw Dreaming 的关系</h2>
+<p>Hermes Agent 的 Dreaming 机制受 <a href="https://github.com/cALL- cOde/OpenClaw">OpenClaw</a> 启发，但在实现上有以下差异：</p>
+<ul>
+<li><strong>阶段简化</strong>：OpenClaw 使用更复杂的 5 阶段，Hermes 简化为 3 阶段</li>
+<li><strong>评分系统</strong>：Hermes 使用更细粒度的 6 维加权评分</li>
+<li><strong>文件结构</strong>：Hermes 使用 DREAMS.md 和 MEMORY.md 双文件机制</li>
+<li><strong>插件化</strong>：Hermes 将 Dreaming 作为独立插件实现</li>
 </ul>
 <h2>源码位置</h2>
-<p><code>/Users/frank/Project/Brain/scripts/brain-dream-cycle.py</code> (807 行)</p>
+<ul>
+<li>主插件：<code>~/.hermes/plugins/dreaming/</code></li>
+<li>CLI 入口：<code>~/.hermes/plugins/dreaming/cli.py</code></li>
+<li>核心逻辑：<code>~/.hermes/plugins/dreaming/tools.py</code></li>
+<li>插件配置：<code>~/.hermes/plugins/dreaming/plugin.yaml</code></li>
+</ul>
 <h2>扩展阅读</h2>
 <ul>
-<li><a href="https://github.com/NousResearch/Brain">Brain 知识管理系统</a></li>
-<li>闭环学习系统：<code>03-core/closed-loop-learning/01-overview</code></li>
+<li><a href="https://github.com/NousResearch/hermes-agent/issues/25309">GitHub Issue #25309</a> - Dreaming 设计讨论</li>
+<li><a href="https://github.com/Minamaged18/hermes-dreaming-plugin">hermes-dreaming-plugin</a> - 独立插件仓库</li>
 <li>Memory 深入理解：<code>03-core/memory/02-deep-dive</code></li>
+<li>技能策展：<code>03-core/curator/01-overview</code></li>
 </ul>`
         },
         '06-releases/01-all-releases': {
